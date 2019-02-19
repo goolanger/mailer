@@ -1,2 +1,2 @@
 build:	
-	go build -o smailey main.go
+	go build -o mailing main.go
