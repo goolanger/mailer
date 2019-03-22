@@ -40,15 +40,31 @@ func main() {
 		json.NewEncoder(res).Encode(struct{ Token string }{Token: *token})
 	}).Methods("GET")
 
-	// PUT /token { token, newToken }
+	// PUT /set-token { token, newToken }
 	router.HandleFunc("/set-token", func(res http.ResponseWriter, req *http.Request) {
+		if !utils.ValidToken(req, *token) {
+			utils.AccessDenied(res)
+			return
+		}
 
+		data := json.NewDecoder(req.Body)
+		str := struct{ Token string }{}
+		err := data.Decode(&str)
+
+		if err != nil {
+			http.Error(res, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		*token = str.Token
+
+		json.NewEncoder(res).Encode(struct{ Token string }{Token: *token})
 	}).Methods("PUT")
 
 	// PUT /send { token, mails: [...], message, smtp.options, threads, retry }
 	router.HandleFunc("/send", func(res http.ResponseWriter, req *http.Request) {
 
-	}).Methods("PUT")
+	}).Methods("POST")
 
 	log.Fatal(http.ListenAndServe(":"+*port, router))
 }
