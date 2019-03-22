@@ -5,42 +5,44 @@ import (
 	"net/smtp"
 )
 
-type MailerConfig struct {
-	Mail  *string
-	Email string
-	Fails int
-	Id    int
+// Config ...
+type Config struct {
+	Mail    *string
+	Email   string
+	Pending int
+	Opt     *SMTPOption
 }
 
-func (mail MailerConfig) SendMail() bool {
-	/*
-		// Concurrent testing purposes only
-		rand.Seed(time.Now().UTC().UnixNano())
-		time.Sleep(time.Second * time.Duration(rand.Intn(5)))
-	*/
+// SMTPOption ...
+type SMTPOption struct {
+	From        string
+	Pass        string
+	SMTPAddress string
+	SMTPPort    string
+}
 
-	from := "...@gmail.com"
-	pass := "..."
+// SendMail ...
+func (mail Config) SendMail() bool {
+	from := mail.Opt.From
+	pass := mail.Opt.Pass
+	port := mail.Opt.SMTPPort
+	address := mail.Opt.SMTPAddress
 
-	err := smtp.SendMail("smtp.gmail.com:587",
-		smtp.PlainAuth("", from, pass, "smtp.gmail.com"),
-		from, []string{mail.Email}, []byte(*mail.Mail))
+	smtpServer := fmt.Sprintf("%s:%s", address, port)
+	err := smtp.SendMail(smtpServer, smtp.PlainAuth("", from, pass, address), from, []string{mail.Email}, []byte(*mail.Mail))
 
-	fmt.Println("SentMail " + mail.Email)
+	fmt.Println("Sent Mail " + mail.Email)
 
 	return err == nil
 }
 
-type MailerApi struct {
-	Get string
-	Put string
-}
+// FilterMails ...
+func FilterMails(mails *[]Config) []string {
+	var result []string
 
-func (api MailerApi) putUrl(mail MailerConfig) string {
-	return fmt.Sprintf(api.Put, mail.Id)
-}
+	for i := range *mails {
+		result = append(result, (*mails)[i].Email)
+	}
 
-func (api MailerApi) Update(mail MailerConfig) {
-	fmt.Println("Updated " + mail.Email)
-	// Submit to the API the mail with number of failures plus one
+	return result
 }

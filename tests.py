@@ -4,6 +4,24 @@ import requests
 TOKEN="qwlehfowiuq4hnir2qc342y34o8tu2n34ihmto35utc8924y5g9ot4u7t24y5"
 NEWTOKEN="qwlehfowiuq4hnir2qc342y34o8tu2n34ihmto35utc8924y5g9ot4u7t2"
 
+MAILCONFIG = {
+  'SMTPOptions': {
+    'SMTPAddress': 'smtp.gmail.com',
+    'SMTPPort': '587',
+    'From': '...@gmail.com',
+    'Pass': '******'
+  },
+  'Mail': 'This is a testing purpose only email message',
+  'Emails': [
+    'amauryuh@gmail.com',
+    'a.caballero@estudiantes.matcom.uh.cu',
+    'inexistent@testing.com'
+  ],
+  'Threads': 2,
+  'Retry': 3,
+  'Wait': 1
+}
+
 def mail_url(path):
   return "http://localhost:5550{}".format(path)
 
@@ -43,11 +61,16 @@ def test_token_reset():
   response = requests.get(mail_url('/token'), headers={ 'User-Token': TOKEN })
   assert_equals(response.status_code, 401)
 
-  pass
+@test_method("Send Mail")
+def test_send_mail():
+  response = requests.post(mail_url('/send'), headers={ 'User-Token': NEWTOKEN }, json=MAILCONFIG)
+  assert_equals(response.status_code, 200)
+  assert_equals(response.json()['Failed'][0], 'inexistent@testing.com')
 
 def main():
   test_token_validation()
   test_token_reset()
+  test_send_mail()
   print(Fore.WHITE, "\n\t\t", "End Tests")
 
 if __name__ == '__main__':

@@ -6,19 +6,22 @@ import (
 	"../mailer"
 )
 
-type ScheduleConfig struct {
+// Config ...
+type Config struct {
 	Threads int
-	ApiWait int
+	Wait    int
 }
 
-func (config ScheduleConfig) Schedule(api mailer.MailerApi, mails []mailer.MailerConfig) {
-	bufferSize := len(mails)
+// Schedule ...
+func (config Config) Schedule(mails *[]mailer.Config) []mailer.Config {
+	bufferSize := len(*mails)
+	var failedMails []mailer.Config
 
 	// Create params channel
-	params := make(chan mailer.MailerConfig, bufferSize)
+	params := make(chan mailer.Config, bufferSize)
 	// Create results channel
 	results := make(chan struct {
-		mailer.MailerConfig
+		mailer.Config
 		bool
 	}, bufferSize)
 
@@ -26,29 +29,44 @@ func (config ScheduleConfig) Schedule(api mailer.MailerApi, mails []mailer.Maile
 		go worker(params, results)
 	}
 
-	for mail := range mails {
-		params <- mails[mail]
+	for mail := range *mails {
+		params <- (*mails)[mail]
 	}
 	close(params)
 
 	for i := 0; i < bufferSize; i++ {
 		result := <-results
 		if !result.bool {
-			api.Update(result.MailerConfig)
-			time.Sleep(time.Millisecond * time.Duration(config.ApiWait))
+			result.Config.Pending--
+			failedMails = append(failedMails, result.Config)
 		}
 	}
 
+	if stillPending(&failedMails) {
+		time.Sleep(time.Second * time.Duration(config.Wait))
+		return config.Schedule(&failedMails)
+	}
+
+	return failedMails
 }
 
-func worker(params <-chan mailer.MailerConfig, results chan<- struct {
-	mailer.MailerConfig
+func worker(params <-chan mailer.Config, results chan<- struct {
+	mailer.Config
 	bool
 }) {
 	for param := range params {
 		results <- struct {
-			mailer.MailerConfig
+			mailer.Config
 			bool
 		}{param, param.SendMail()}
 	}
+}
+
+func stillPending(mails *[]mailer.Config) bool {
+	for i := range *mails {
+		if (*mails)[i].Pending > 0 {
+			return true
+		}
+	}
+	return false
 }

@@ -11,6 +11,8 @@ import (
 	"github.com/akamensky/argparse"
 	"github.com/gorilla/mux"
 
+	"./src/mailer"
+	"./src/scheduler"
 	"./src/utils"
 )
 
@@ -47,23 +49,54 @@ func main() {
 			return
 		}
 
-		data := json.NewDecoder(req.Body)
-		str := struct{ Token string }{}
-		err := data.Decode(&str)
+		body := json.NewDecoder(req.Body)
+		data := struct{ Token string }{}
+		err := body.Decode(&data)
 
 		if err != nil {
 			http.Error(res, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		*token = str.Token
+		*token = data.Token
 
 		json.NewEncoder(res).Encode(struct{ Token string }{Token: *token})
 	}).Methods("PUT")
 
 	// PUT /send { token, mails: [...], message, smtp.options, threads, retry }
 	router.HandleFunc("/send", func(res http.ResponseWriter, req *http.Request) {
+		if !utils.ValidToken(req, *token) {
+			utils.AccessDenied(res)
+			return
+		}
 
+		body := json.NewDecoder(req.Body)
+		data := struct {
+			SMTPOptions mailer.SMTPOption
+			Mail        string
+			Emails      []string
+			Threads     int
+			Retry       int
+			Wait        int
+		}{}
+		err := body.Decode(&data)
+
+		if err != nil {
+			http.Error(res, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		config := scheduler.Config{Wait: data.Wait, Threads: data.Threads}
+
+		var mails []mailer.Config
+
+		for i := range data.Emails {
+			mails = append(mails, mailer.Config{Mail: &data.Mail, Email: data.Emails[i], Pending: data.Retry, Opt: &data.SMTPOptions})
+		}
+
+		fails := config.Schedule(&mails)
+
+		json.NewEncoder(res).Encode(struct{ Failed []string }{Failed: mailer.FilterMails(&fails)})
 	}).Methods("POST")
 
 	log.Fatal(http.ListenAndServe(":"+*port, router))
